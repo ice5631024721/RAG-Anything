@@ -7,6 +7,7 @@ This example demonstrates how to use RAG-Anything's modal processors directly wi
 import asyncio
 import argparse
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_pipeline_status
 from lightrag import LightRAG
 from raganything.modalprocessors import (
@@ -95,7 +96,7 @@ async def process_image_example(lightrag: LightRAG, vision_model_func):
     }
 
     # Process image
-    description, entity_info = await image_processor.process_multimodal_content(
+    (description, entity_info, _) = await image_processor.process_multimodal_content(
         modal_content=image_content,
         content_type="image",
         file_path="image_example.jpg",
@@ -127,7 +128,7 @@ async def process_table_example(lightrag: LightRAG, llm_model_func):
     }
 
     # Process table
-    description, entity_info = await table_processor.process_multimodal_content(
+    (description, entity_info, _) = await table_processor.process_multimodal_content(
         modal_content=table_content,
         content_type="table",
         file_path="table_example.md",
@@ -150,7 +151,7 @@ async def process_equation_example(lightrag: LightRAG, llm_model_func):
     equation_content = {"text": "E = mc^2", "text_format": "LaTeX"}
 
     # Process equation
-    description, entity_info = await equation_processor.process_multimodal_content(
+    (description, entity_info, _) = await equation_processor.process_multimodal_content(
         modal_content=equation_content,
         content_type="equation",
         file_path="equation_example.txt",
@@ -165,11 +166,15 @@ async def process_equation_example(lightrag: LightRAG, llm_model_func):
 async def initialize_rag(api_key: str, base_url: str = None):
     rag = LightRAG(
         working_dir=WORKING_DIR,
-        embedding_func=lambda texts: openai_embed(
-            texts,
-            model="text-embedding-3-large",
-            api_key=api_key,
-            base_url=base_url,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=3072,
+            max_token_size=8192,
+            func=lambda texts: openai_embed(
+                texts,
+                model="text-embedding-3-large",
+                api_key=api_key,
+                base_url=base_url,
+            ),
         ),
         llm_model_func=lambda prompt,
         system_prompt=None,

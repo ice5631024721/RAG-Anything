@@ -19,7 +19,7 @@
     </p>
     <p>
       <a href="https://github.com/HKUDS/RAG-Anything/stargazers"><img src='https://img.shields.io/github/stars/HKUDS/RAG-Anything?color=00d9ff&style=for-the-badge&logo=star&logoColor=white&labelColor=1a1a2e' /></a>
-      <img src="https://img.shields.io/badge/🐍Python-3.9+-4ecdc4?style=for-the-badge&logo=python&logoColor=white&labelColor=1a1a2e">
+      <img src="https://img.shields.io/badge/🐍Python-3.10-4ecdc4?style=for-the-badge&logo=python&logoColor=white&labelColor=1a1a2e">
       <a href="https://pypi.org/project/raganything/"><img src="https://img.shields.io/pypi/v/raganything.svg?style=for-the-badge&logo=pypi&logoColor=white&labelColor=1a1a2e&color=ff6b6b"></a>
     </p>
     <p>
@@ -38,6 +38,19 @@
 <div align="center">
   <div style="width: 100%; height: 2px; margin: 20px 0; background: linear-gradient(90deg, transparent, #00d9ff, transparent);"></div>
 </div>
+
+<div align="center">
+  <a href="#-quick-start" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/Quick%20Start-Get%20Started%20Now-00d9ff?style=for-the-badge&logo=rocket&logoColor=white&labelColor=1a1a2e">
+  </a>
+</div>
+
+---
+
+## 🎉 News
+- [X] [2025.07.05]🎯📢 RAGAnything now includes [context configuration module](docs/context_aware_processing.md), enabling the addition of relevant contextual information for multimodal content processing.
+- [X] [2025.07.04]🎯📢 RAGAnything now supports query with multimodal content, enabling enhanced retrieval-augmented generation with integrated text, images, tables, and equations processing.
+- [X] [2025.07.03]🎯📢 RAGAnything has reached 1K🌟 stars on GitHub! Thank you for your support and contributions.
 
 ---
 
@@ -170,7 +183,7 @@ The system deploys modality-aware processing units for heterogeneous data modali
 
 </div>
 
-### 4. Multi-Modal Knowledge Graph Index
+### 4. Multimodal Knowledge Graph Index
 
 <div style="background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%); border-radius: 10px; padding: 20px; margin: 15px 0; border-left: 4px solid #4ecdc4;">
 
@@ -219,7 +232,14 @@ The hybrid retrieval system combines vector similarity search with graph travers
 #### Option 1: Install from PyPI (Recommended)
 
 ```bash
+# Basic installation
 pip install raganything
+
+# With optional dependencies for extended format support:
+pip install 'raganything[all]'              # All optional features
+pip install 'raganything[image]'            # Image format conversion (BMP, TIFF, GIF, WebP)
+pip install 'raganything[text]'             # Text file processing (TXT, MD)
+pip install 'raganything[image,text]'       # Multiple features
 ```
 
 #### Option 2: Install from Source
@@ -228,13 +248,24 @@ pip install raganything
 git clone https://github.com/HKUDS/RAG-Anything.git
 cd RAG-Anything
 pip install -e .
+
+# With optional dependencies
+pip install -e '.[all]'
 ```
 
-> **⚠️ Important Changes in MinerU 2.0:**
-> - Package name changed from `magic-pdf` to `mineru`
-> - LibreOffice integration removed (Office documents require manual PDF conversion)
-> - Simplified command-line interface with `mineru` command
-> - New backend options and improved performance
+#### Optional Dependencies
+
+- **`[image]`** - Enables processing of BMP, TIFF, GIF, WebP image formats (requires Pillow)
+- **`[text]`** - Enables processing of TXT and MD files (requires ReportLab)
+- **`[all]`** - Includes all Python optional dependencies
+
+> **⚠️ Office Document Processing Requirements:**
+> - Office documents (.doc, .docx, .ppt, .pptx, .xls, .xlsx) require **LibreOffice** installation
+> - Download from [LibreOffice official website](https://www.libreoffice.org/download/download/)
+> - **Windows**: Download installer from official website
+> - **macOS**: `brew install --cask libreoffice`
+> - **Ubuntu/Debian**: `sudo apt-get install libreoffice`
+> - **CentOS/RHEL**: `sudo yum install libreoffice`
 
 **Check MinerU installation:**
 
@@ -254,22 +285,166 @@ Models are downloaded automatically on first use. For manual download, refer to 
 
 ```python
 import asyncio
-from raganything import RAGAnything
+from raganything import RAGAnything, RAGAnythingConfig
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from lightrag.utils import EmbeddingFunc
 
 async def main():
+    # Set up API configuration
+    api_key = "your-api-key"
+    base_url = "your-base-url"  # Optional
+
+    # Create RAGAnything configuration
+    config = RAGAnythingConfig(
+        working_dir="./rag_storage",
+        mineru_parse_method="auto",
+        enable_image_processing=True,
+        enable_table_processing=True,
+        enable_equation_processing=True,
+    )
+
+    # Define LLM model function
+    def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
+        return openai_complete_if_cache(
+            "gpt-4o-mini",
+            prompt,
+            system_prompt=system_prompt,
+            history_messages=history_messages,
+            api_key=api_key,
+            base_url=base_url,
+            **kwargs,
+        )
+
+    # Define vision model function for image processing
+    def vision_model_func(
+        prompt, system_prompt=None, history_messages=[], image_data=None, **kwargs
+    ):
+        if image_data:
+            return openai_complete_if_cache(
+                "gpt-4o",
+                "",
+                system_prompt=None,
+                history_messages=[],
+                messages=[
+                    {"role": "system", "content": system_prompt}
+                    if system_prompt
+                    else None,
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_data}"
+                                },
+                            },
+                        ],
+                    }
+                    if image_data
+                    else {"role": "user", "content": prompt},
+                ],
+                api_key=api_key,
+                base_url=base_url,
+                **kwargs,
+            )
+        else:
+            return llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+
+    # Define embedding function
+    embedding_func = EmbeddingFunc(
+        embedding_dim=3072,
+        max_token_size=8192,
+        func=lambda texts: openai_embed(
+            texts,
+            model="text-embedding-3-large",
+            api_key=api_key,
+            base_url=base_url,
+        ),
+    )
+
     # Initialize RAGAnything
     rag = RAGAnything(
+        config=config,
+        llm_model_func=llm_model_func,
+        vision_model_func=vision_model_func,
+        embedding_func=embedding_func,
+    )
+
+    # Process a document
+    await rag.process_document_complete(
+        file_path="path/to/your/document.pdf",
+        output_dir="./output",
+        parse_method="auto"
+    )
+
+    # Query the processed content
+    # Pure text query - for basic knowledge base search
+    text_result = await rag.aquery(
+        "What are the main findings shown in the figures and tables?",
+        mode="hybrid"
+    )
+    print("Text query result:", text_result)
+
+    # Multimodal query with specific multimodal content
+    multimodal_result = await rag.aquery_with_multimodal(
+    "Explain this formula and its relevance to the document content",
+    multimodal_content=[{
+        "type": "equation",
+        "latex": "P(d|q) = \\frac{P(q|d) \\cdot P(d)}{P(q)}",
+        "equation_caption": "Document relevance probability"
+    }],
+    mode="hybrid"
+)
+    print("Multimodal query result:", multimodal_result)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### 2. Direct Multimodal Content Processing
+
+```python
+import asyncio
+from lightrag import LightRAG
+from lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from lightrag.utils import EmbeddingFunc
+from raganything.modalprocessors import ImageModalProcessor, TableModalProcessor
+
+async def process_multimodal_content():
+    # Set up API configuration
+    api_key = "your-api-key"
+    base_url = "your-base-url"  # Optional
+
+    # Initialize LightRAG
+    rag = LightRAG(
         working_dir="./rag_storage",
         llm_model_func=lambda prompt, system_prompt=None, history_messages=[], **kwargs: openai_complete_if_cache(
             "gpt-4o-mini",
             prompt,
             system_prompt=system_prompt,
             history_messages=history_messages,
-            api_key="your-api-key",
+            api_key=api_key,
+            base_url=base_url,
             **kwargs,
         ),
-        vision_model_func=lambda prompt, system_prompt=None, history_messages=[], image_data=None, **kwargs: openai_complete_if_cache(
+        embedding_func=EmbeddingFunc(
+            embedding_dim=3072,
+            max_token_size=8192,
+            func=lambda texts: openai_embed(
+                texts,
+                model="text-embedding-3-large",
+                api_key=api_key,
+                base_url=base_url,
+            ),
+        )
+    )
+    await rag.initialize_storages()
+
+    # Process an image
+    image_processor = ImageModalProcessor(
+        lightrag=rag,
+        modal_caption_func=lambda prompt, system_prompt=None, history_messages=[], image_data=None, **kwargs: openai_complete_if_cache(
             "gpt-4o",
             "",
             system_prompt=None,
@@ -281,62 +456,18 @@ async def main():
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
                 ]} if image_data else {"role": "user", "content": prompt}
             ],
-            api_key="your-api-key",
+            api_key=api_key,
+            base_url=base_url,
             **kwargs,
         ) if image_data else openai_complete_if_cache(
             "gpt-4o-mini",
             prompt,
             system_prompt=system_prompt,
             history_messages=history_messages,
-            api_key="your-api-key",
+            api_key=api_key,
+            base_url=base_url,
             **kwargs,
-        ),
-        embedding_func=lambda texts: openai_embed(
-            texts,
-            model="text-embedding-3-large",
-            api_key="your-api-key",
-        ),
-        embedding_dim=3072,
-        max_token_size=8192
-    )
-
-    # Process a document
-    await rag.process_document_complete(
-        file_path="path/to/your/document.pdf",
-        output_dir="./output",
-        parse_method="auto"
-    )
-
-    # Query the processed content
-    result = await rag.query_with_multimodal(
-        "What are the main findings shown in the figures and tables?",
-        mode="hybrid"
-    )
-    print(result)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-#### 2. Direct Multimodal Content Processing
-
-```python
-import asyncio
-from lightrag import LightRAG
-from raganything.modalprocessors import ImageModalProcessor, TableModalProcessor
-
-async def process_multimodal_content():
-    # Initialize LightRAG
-    rag = LightRAG(
-        working_dir="./rag_storage",
-        # ... your LLM and embedding configurations
-    )
-    await rag.initialize_storages()
-
-    # Process an image
-    image_processor = ImageModalProcessor(
-        lightrag=rag,
-        modal_caption_func=your_vision_model_func
+        )
     )
 
     image_content = {
@@ -355,7 +486,15 @@ async def process_multimodal_content():
     # Process a table
     table_processor = TableModalProcessor(
         lightrag=rag,
-        modal_caption_func=your_llm_model_func
+        modal_caption_func=lambda prompt, system_prompt=None, history_messages=[], **kwargs: openai_complete_if_cache(
+            "gpt-4o-mini",
+            prompt,
+            system_prompt=system_prompt,
+            history_messages=history_messages,
+            api_key=api_key,
+            base_url=base_url,
+            **kwargs,
+        )
     )
 
     table_content = {
@@ -408,11 +547,158 @@ class CustomModalProcessor(GenericModalProcessor):
 
 #### 5. Query Options
 
+RAG-Anything provides two types of query methods:
+
+**Pure Text Queries** - Direct knowledge base search using LightRAG:
 ```python
-# Different query modes
-result_hybrid = await rag.query_with_multimodal("Your question", mode="hybrid")
-result_local = await rag.query_with_multimodal("Your question", mode="local")
-result_global = await rag.query_with_multimodal("Your question", mode="global")
+# Different query modes for text queries
+text_result_hybrid = await rag.aquery("Your question", mode="hybrid")
+text_result_local = await rag.aquery("Your question", mode="local")
+text_result_global = await rag.aquery("Your question", mode="global")
+text_result_naive = await rag.aquery("Your question", mode="naive")
+
+# Synchronous version
+sync_text_result = rag.query("Your question", mode="hybrid")
+```
+
+**Multimodal Queries** - Enhanced queries with multimodal content analysis:
+```python
+# Query with table data
+table_result = await rag.aquery_with_multimodal(
+    "Compare these performance metrics with the document content",
+    multimodal_content=[{
+        "type": "table",
+        "table_data": """Method,Accuracy,Speed
+                        RAGAnything,95.2%,120ms
+                        Traditional,87.3%,180ms""",
+        "table_caption": "Performance comparison"
+    }],
+    mode="hybrid"
+)
+
+# Query with equation content
+equation_result = await rag.aquery_with_multimodal(
+    "Explain this formula and its relevance to the document content",
+    multimodal_content=[{
+        "type": "equation",
+        "latex": "P(d|q) = \\frac{P(q|d) \\cdot P(d)}{P(q)}",
+        "equation_caption": "Document relevance probability"
+    }],
+    mode="hybrid"
+)
+```
+
+#### 6. Loading Existing LightRAG Instance
+
+```python
+import asyncio
+from raganything import RAGAnything, RAGAnythingConfig
+from lightrag import LightRAG
+from lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from lightrag.kg.shared_storage import initialize_pipeline_status
+from lightrag.utils import EmbeddingFunc
+import os
+
+async def load_existing_lightrag():
+    # Set up API configuration
+    api_key = "your-api-key"
+    base_url = "your-base-url"  # Optional
+
+    # First, create or load existing LightRAG instance
+    lightrag_working_dir = "./existing_lightrag_storage"
+
+    # Check if previous LightRAG instance exists
+    if os.path.exists(lightrag_working_dir) and os.listdir(lightrag_working_dir):
+        print("✅ Found existing LightRAG instance, loading...")
+    else:
+        print("❌ No existing LightRAG instance found, will create new one")
+
+    # Create/load LightRAG instance with your configuration
+    lightrag_instance = LightRAG(
+        working_dir=lightrag_working_dir,
+        llm_model_func=lambda prompt, system_prompt=None, history_messages=[], **kwargs: openai_complete_if_cache(
+            "gpt-4o-mini",
+            prompt,
+            system_prompt=system_prompt,
+            history_messages=history_messages,
+            api_key=api_key,
+            base_url=base_url,
+            **kwargs,
+        ),
+        embedding_func=EmbeddingFunc(
+            embedding_dim=3072,
+            max_token_size=8192,
+            func=lambda texts: openai_embed(
+                texts,
+                model="text-embedding-3-large",
+                api_key=api_key,
+                base_url=base_url,
+            ),
+        )
+    )
+
+    # Initialize storage (this will load existing data if available)
+    await lightrag_instance.initialize_storages()
+    await initialize_pipeline_status()
+
+    # Define vision model function for image processing
+    def vision_model_func(
+        prompt, system_prompt=None, history_messages=[], image_data=None, **kwargs
+    ):
+        if image_data:
+            return openai_complete_if_cache(
+                "gpt-4o",
+                "",
+                system_prompt=None,
+                history_messages=[],
+                messages=[
+                    {"role": "system", "content": system_prompt}
+                    if system_prompt
+                    else None,
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_data}"
+                                },
+                            },
+                        ],
+                    }
+                    if image_data
+                    else {"role": "user", "content": prompt},
+                ],
+                api_key=api_key,
+                base_url=base_url,
+                **kwargs,
+            )
+        else:
+            return lightrag_instance.llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+
+    # Now use existing LightRAG instance to initialize RAGAnything
+    rag = RAGAnything(
+        lightrag=lightrag_instance,  # Pass existing LightRAG instance
+        vision_model_func=vision_model_func,
+        # Note: working_dir, llm_model_func, embedding_func, etc. are inherited from lightrag_instance
+    )
+
+    # Query existing knowledge base
+    result = await rag.aquery(
+        "What data has been processed in this LightRAG instance?",
+        mode="hybrid"
+    )
+    print("Query result:", result)
+
+    # Add new multimodal document to existing LightRAG instance
+    await rag.process_document_complete(
+        file_path="path/to/new/multimodal_document.pdf",
+        output_dir="./output"
+    )
+
+if __name__ == "__main__":
+    asyncio.run(load_existing_lightrag())
 ```
 
 ---
@@ -496,17 +782,47 @@ mineru -p input.pdf -o output_dir -b pipeline --device cuda  # GPU acceleration
 You can also configure MinerU through RAGAnything parameters:
 
 ```python
-# Configure parsing behavior
+# Basic parsing configuration
 await rag.process_document_complete(
     file_path="document.pdf",
-    parse_method="auto",     # or "ocr", "txt"
-    device="cuda",           # GPU acceleration
-    backend="pipeline",      # parsing backend
-    lang="en"               # language optimization
+    output_dir="./output/",
+    parse_method="auto",          # or "ocr", "txt"
+)
+
+# Advanced MinerU parsing configuration with special parameters
+await rag.process_document_complete(
+    file_path="document.pdf",
+    output_dir="./output/",
+    parse_method="auto",          # Parsing method: "auto", "ocr", "txt"
+
+    # MinerU special parameters - all supported kwargs:
+    lang="ch",                   # Document language for OCR optimization (e.g., "ch", "en", "ja")
+    device="cuda:0",             # Inference device: "cpu", "cuda", "cuda:0", "npu", "mps"
+    start_page=0,                # Starting page number (0-based, for PDF)
+    end_page=10,                 # Ending page number (0-based, for PDF)
+    formula=True,                # Enable formula parsing
+    table=True,                  # Enable table parsing
+    backend="pipeline",          # Parsing backend: "pipeline", "vlm-transformers", etc.
+    source="huggingface",        # Model source: "huggingface", "modelscope", "local"
+
+    # Standard RAGAnything parameters
+    display_stats=True,          # Display content statistics
+    split_by_character=None,     # Optional character to split text by
+    doc_id=None                  # Optional document ID
 )
 ```
 
 > **Note**: MinerU 2.0 no longer uses the `magic-pdf.json` configuration file. All settings are now passed as command-line parameters or function arguments.
+
+### Processing Requirements
+
+Different content types require specific optional dependencies:
+
+- **Office Documents** (.doc, .docx, .ppt, .pptx, .xls, .xlsx): Install [LibreOffice](https://www.libreoffice.org/download/download/)
+- **Extended Image Formats** (.bmp, .tiff, .gif, .webp): Install with `pip install raganything[image]`
+- **Text Files** (.txt, .md): Install with `pip install raganything[text]`
+
+> **📋 Quick Install**: Use `pip install raganything[all]` to enable all format support (Python dependencies only - LibreOffice still needs separate installation)
 
 ---
 
@@ -515,9 +831,9 @@ await rag.process_document_complete(
 ### Document Formats
 
 - **PDFs** - Research papers, reports, presentations
-- **Office Documents** - DOC, DOCX, PPT, PPTX, XLS, XLSX ⚠️
-- **Images** - JPG, PNG, BMP, TIFF, GIF, WebP 📸
-- **Text Files** - TXT, MD ⚠️
+- **Office Documents** - DOC, DOCX, PPT, PPTX, XLS, XLSX
+- **Images** - JPG, PNG, BMP, TIFF, GIF, WebP
+- **Text Files** - TXT, MD
 
 ### Multimodal Elements
 
@@ -526,41 +842,7 @@ await rag.process_document_complete(
 - **Equations** - Mathematical formulas in LaTeX format
 - **Generic Content** - Custom content types via extensible processors
 
-### Processing Requirements
-
-> **⚠️ Office Document Processing Requirements:**
->
-> RAG-Anything supports comprehensive Office document processing through automatic PDF conversion:
-> - **Supported formats**: .doc, .docx, .ppt, .pptx, .xls, .xlsx
-> - **LibreOffice requirement**: Automatic conversion requires LibreOffice installation
-> - **Installation instructions**:
->   - **Windows**: Download from [LibreOffice official website](https://www.libreoffice.org/download/download/)
->   - **macOS**: `brew install --cask libreoffice`
->   - **Ubuntu/Debian**: `sudo apt-get install libreoffice`
->   - **CentOS/RHEL**: `sudo yum install libreoffice`
-> - **Alternative approach**: Convert to PDF manually for optimal performance
-> - **Processing workflow**: Office files are automatically converted to PDF, then processed by MinerU
-
-> **📸 Image Format Support:**
->
-> RAG-Anything supports comprehensive image format processing:
-> - **MinerU native formats**: .jpg, .jpeg, .png (processed directly)
-> - **Auto-converted formats**: .bmp, .tiff/.tif, .gif, .webp (automatically converted to PNG)
-> - **Conversion requirements**: PIL/Pillow library (`pip install Pillow`)
-> - **Processing workflow**: Non-native formats are converted to PNG, then processed by MinerU
-> - **Quality preservation**: Conversion maintains image quality while ensuring compatibility
-
-> **⚠️ Text File Processing Requirements:**
->
-> RAG-Anything supports text file processing through automatic PDF conversion:
-> - **Supported formats**: .txt, .md
-> - **ReportLab requirement**: Automatic conversion requires ReportLab library
-> - **Installation**: `pip install reportlab`
-> - **Features**: Supports multiple text encodings (UTF-8, GBK, Latin-1, CP1252)
-> - **Complete Markdown support**: Headers, paragraphs, **bold**, *italic*, ~~strikethrough~~, `inline code`, code blocks, tables, lists, quotes, links, images, and horizontal rules
-> - **Advanced features**: Auto-scaling images, nested lists, multi-level quotes, syntax-highlighted code blocks
-> - **Cross-platform fonts**: Automatic Chinese font detection for Windows/macOS
-> - **Processing workflow**: Text files are automatically converted to PDF, then processed by MinerU
+*For installation of format-specific dependencies, see the [Configuration](#-configuration) section.*
 
 ---
 

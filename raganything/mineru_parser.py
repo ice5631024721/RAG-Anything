@@ -105,7 +105,14 @@ class MineruParser:
             cmd.extend(["-d", device])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
             print("MinerU command executed successfully")
             if result.stdout:
                 print(f"Output: {result.stdout}")
@@ -136,9 +143,7 @@ class MineruParser:
         """
         # Look for the generated files
         md_file = output_dir / f"{file_stem}.md"
-        json_file = (
-            output_dir / f"{file_stem}.json"
-        )  # MinerU 2.0 uses .json instead of _content_list.json
+        json_file = output_dir / f"{file_stem}_content_list.json"
 
         # Try alternative naming patterns if files not found
         if not md_file.exists():
@@ -146,7 +151,7 @@ class MineruParser:
             subdir = output_dir / file_stem
             if subdir.exists():
                 md_file = subdir / f"{file_stem}.md"
-                json_file = subdir / f"{file_stem}.json"
+                json_file = subdir / f"{file_stem}_content_list.json"
 
         # Read markdown content
         md_content = ""
@@ -168,6 +173,7 @@ class MineruParser:
 
         # If standard files not found, look for any .md and .json files in the directory
         if not md_content and not content_list:
+            # First try to find any markdown file
             for file_path in output_dir.rglob("*.md"):
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
@@ -176,7 +182,8 @@ class MineruParser:
                 except Exception:
                     continue
 
-            for file_path in output_dir.rglob("*.json"):
+            # Then try to find content list JSON files
+            for file_path in output_dir.rglob("*_content_list.json"):
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
@@ -395,7 +402,10 @@ class MineruParser:
 
     @staticmethod
     def parse_office_doc(
-        doc_path: Union[str, Path], output_dir: Optional[str] = None, **kwargs
+        doc_path: Union[str, Path],
+        output_dir: Optional[str] = None,
+        lang: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[List[Dict[str, Any]], str]:
         """
         Parse office document by first converting to PDF, then parsing with MinerU 2.0
@@ -408,6 +418,7 @@ class MineruParser:
         Args:
             doc_path: Path to the document file (.doc, .docx, .ppt, .pptx, .xls, .xlsx)
             output_dir: Output directory path
+            lang: Document language for OCR optimization
             **kwargs: Additional parameters for mineru command
 
         Returns:
@@ -439,10 +450,12 @@ class MineruParser:
                     capture_output=True,
                     check=True,
                     timeout=10,
+                    encoding="utf-8",
+                    errors="ignore",
                 )
                 libreoffice_available = True
                 working_libreoffice_cmd = "libreoffice"
-                print(f"LibreOffice detected: {result.stdout.decode().strip()}")
+                print(f"LibreOffice detected: {result.stdout.strip()}")
             except (
                 subprocess.CalledProcessError,
                 FileNotFoundError,
@@ -459,11 +472,13 @@ class MineruParser:
                             capture_output=True,
                             check=True,
                             timeout=10,
+                            encoding="utf-8",
+                            errors="ignore",
                         )
                         libreoffice_available = True
                         working_libreoffice_cmd = cmd
                         print(
-                            f"LibreOffice detected with command '{cmd}': {result.stdout.decode().strip()}"
+                            f"LibreOffice detected with command '{cmd}': {result.stdout.strip()}"
                         )
                         break
                     except (
@@ -517,6 +532,8 @@ class MineruParser:
                             capture_output=True,
                             text=True,
                             timeout=60,  # 60 second timeout
+                            encoding="utf-8",
+                            errors="ignore",
                         )
 
                         if result.returncode == 0:
@@ -560,7 +577,7 @@ class MineruParser:
 
                 # Parse the converted PDF
                 return MineruParser.parse_pdf(
-                    pdf_path=pdf_path, output_dir=output_dir, **kwargs
+                    pdf_path=pdf_path, output_dir=output_dir, lang=lang, **kwargs
                 )
 
         except Exception as e:
@@ -569,7 +586,10 @@ class MineruParser:
 
     @staticmethod
     def parse_text_file(
-        text_path: Union[str, Path], output_dir: Optional[str] = None, **kwargs
+        text_path: Union[str, Path],
+        output_dir: Optional[str] = None,
+        lang: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[List[Dict[str, Any]], str]:
         """
         Parse text file by first converting to PDF, then parsing with MinerU 2.0
@@ -579,6 +599,7 @@ class MineruParser:
         Args:
             text_path: Path to the text file (.txt, .md)
             output_dir: Output directory path
+            lang: Document language for OCR optimization
             **kwargs: Additional parameters for mineru command
 
         Returns:
@@ -1090,7 +1111,7 @@ class MineruParser:
 
                 # Parse the converted PDF
                 return MineruParser.parse_pdf(
-                    pdf_path=pdf_path, output_dir=output_dir, **kwargs
+                    pdf_path=pdf_path, output_dir=output_dir, lang=lang, **kwargs
                 )
 
         except Exception as e:
@@ -1136,9 +1157,9 @@ class MineruParser:
                 f"Warning: Office document detected ({ext}). "
                 f"MinerU 2.0 requires conversion to PDF first."
             )
-            return MineruParser.parse_office_doc(file_path, output_dir, **kwargs)
+            return MineruParser.parse_office_doc(file_path, output_dir, lang, **kwargs)
         elif ext in [".txt", ".md"]:
-            return MineruParser.parse_text_file(file_path, output_dir, **kwargs)
+            return MineruParser.parse_text_file(file_path, output_dir, lang, **kwargs)
         else:
             # For unsupported file types, try as PDF
             print(
@@ -1157,7 +1178,12 @@ class MineruParser:
         """
         try:
             result = subprocess.run(
-                ["mineru", "--version"], capture_output=True, text=True, check=True
+                ["mineru", "--version"],
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding="utf-8",
+                errors="ignore",
             )
             print(f"MinerU version: {result.stdout.strip()}")
             return True
